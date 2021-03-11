@@ -97,7 +97,13 @@ pod_net_add_option(Option, {NetName, NetOptions}) ->
 
 pod_read_net_option(Option) ->
     [Name|Value] = string:split(Option, "="),
-    {list_to_atom(Name), case Value of
+    pod_read_net_option(erlang:list_to_atom(Name), Value).
+
+pod_read_net_option(srcport, Value) ->
+    [Low_port, High_port] = string:lexemes(Value, "-"),
+    {srcport, lists:flatten(lists:join(" ", [Low_port, High_port]))};
+pod_read_net_option(Name, Value) ->
+    {Name, case Value of
         [] -> true;
         ["true"] -> true;
         ["false"] -> false;

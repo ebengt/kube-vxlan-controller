@@ -17,6 +17,11 @@
 
     cmd/4
 ]).
+-ifdef(TEST).
+-export([
+    link_add_command/1
+]).
+-endif.
 
 -include_lib("kernel/include/logger.hrl").
 
@@ -53,8 +58,7 @@ links(Action, Pod, NetNames, Config) ->
     end, NetNames).
 
 link(add, Pod, NetName, Config) ->
-    Command = cmd("ip link add ~s type ~s id ~s dev ~s dstport 0",
-		  [name, type, id, dev], Pod, NetName),
+    Command = link_add_command(pod_net_options(NetName, Pod)),
     ?Agent:exec(Pod, Command, Config);
 
 link(delete, Pod, NetName, Config) ->
@@ -153,5 +157,31 @@ cmd(Format, Args, Pod, NetName) ->
     CmdArgs = [cmd_arg(Arg, NetOptions) || Arg <- Args],
     lists:flatten(io_lib:format(Format, CmdArgs)).
 
+%% ===================================================================
+%% Private functions
+%% ===================================================================
+
 cmd_arg(Arg, NetOptions) when is_atom(Arg) -> maps:get(Arg, NetOptions);
 cmd_arg(Arg, _NetOptions) -> Arg.
+
+
+link_add_command(Options) ->
+	Acc = {"ip link add", []},
+	Fun = fun (Arg, {Format0, Args0}) ->
+		Value = maps:get(Arg, Options, nosucharg),
+		Format = link_add_command_format(Value, Arg, Format0),
+		Args = link_add_command_args(Value, Args0),
+		{Format, Args}
+	end,
+	{Format, Args} = lists:foldl( Fun, Acc, [name, type, id, dev, dstport, srcport]),
+	lists:flatten(io_lib:format(Format, Args)).
+
+link_add_command_args(nosucharg, Args) -> Args;
+link_add_command_args(Value, Args) -> Args ++ [Value]. % Slow, but steady.
+
+link_add_command_format(nosucharg, _Arg, Format) ->
+	Format;
+link_add_command_format(_Value, name, Format) ->
+	Format ++ " ~s";
+link_add_command_format(_Value, Arg, Format) ->
+	Format ++ " " ++ erlang:atom_to_list(Arg) ++ " ~s".
